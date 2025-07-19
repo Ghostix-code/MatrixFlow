@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Matrix Code Rain - Clean</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+      font-family: monospace;
+      color: lime;
+    }
+
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      background: black;
+      padding: 10px;
+      border: 1px solid lime;
+      border-radius: 8px;
+      box-shadow: 0 0 6px lime;
+      max-width: 400px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    input, button, select {
+      background: black;
+      color: lime;
+      border: 1px solid lime;
+      padding: 5px 8px;
+      font-size: 14px;
+      border-radius: 3px;
+      outline: none;
+      flex: 1 1 auto;
+      min-width: 80px;
+    }
+
+    button {
+      flex: 0 0 auto;
+      cursor: pointer;
+    }
+
+    #wordList {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .wordItem {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: black;
+      border: 1px solid lime;
+      padding: 4px 8px;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+
+    .presetColors {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+      margin-left: 10px;
+    }
+
+    .colorSwatch {
+      width: 16px;
+      height: 16px;
+      border: 1px solid lime;
+      cursor: pointer;
+      border-radius: 2px;
+      transition: transform 0.2s;
+    }
+
+    .colorSwatch.selected {
+      outline: 1.5px solid white;
+    }
+
+    .colorSwatch:hover {
+      transform: scale(1.1);
+    }
+
+    #limitNotice {
+      color: lime;
+      font-size: 12px;
+      margin-top: 4px;
+      user-select: none;
+    }
+
+    /* Donate button fixed top-right */
+    #donateTopRight {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      background: black;
+      color: #0F0;
+      border: 1px solid #0F0;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-weight: bold;
+      text-shadow: 0 0 5px #0F0, 0 0 10px #0F0;
+      cursor: pointer;
+      z-index: 20;
+      user-select: none;
+      transition: background-color 0.3s, color 0.3s;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #donateTopRight:hover {
+      background: #0F0;
+      color: black;
+      text-decoration: none;
+      text-shadow: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <div class="controls">
+      <input id="inputBox" placeholder="Enter word..." maxlength="20" autocomplete="off" />
+      <button id="addBtn">Add</button>
+      <select id="speedSelect" title="Speed">
+        <option value="1">1x</option>
+        <option value="2">2x</option>
+        <option value="3">3x</option>
+      </select>
+    </div>
+    <div id="limitNotice" style="display:none;">Max Word Limit</div>
+    <div id="wordList" aria-live="polite" aria-label="Word list"></div>
+  </div>
+
+  <a href="https://khuzaima72.gumroad.com/l/dabezc" target="_blank" id="donateTopRight" aria-label="Donate on Gumroad">
+    💚 Donate
+  </a>
+
+  <canvas id="matrixCanvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById("matrixCanvas");
+    const ctx = canvas.getContext("2d");
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
+
+    const fontSize = 20;
+    let columns = Math.floor(canvas.width / fontSize);
+    let drops = Array(columns).fill(1);
+
+    const letters = "アァイゥエオカキクケコサシスセソタチツテト0123456789@$#%&*".split("");
+
+    let customWords = [];
+    let wordColors = {};
+    let rainbowWords = {};
+    let speed = 1;
+    let rainbowIndex = 0;
+
+    const inputBox = document.getElementById("inputBox");
+    const addBtn = document.getElementById("addBtn");
+    const wordListDiv = document.getElementById("wordList");
+    const speedSelect = document.getElementById("speedSelect");
+    const limitNotice = document.getElementById("limitNotice");
+
+    const presetColors = [
+      "rainbow", "#00FF00", "#FF0000", "#00BFFF", "#FFFF00", "#FFFFFF", "#FF00FF"
+    ];
+
+    function addWords() {
+      const words = inputBox.value.trim().split(/\s+/);
+      for (const word of words) {
+        if (customWords.length >= 10) break;
+        if (!customWords.includes(word) && word !== "") {
+          customWords.push(word);
+          wordColors[word] = "#00FF00";
+          rainbowWords[word] = false;
+        }
+      }
+      inputBox.value = "";
+      renderWordList();
+      limitNotice.style.display = customWords.length >= 10 ? "block" : "none";
+    }
+
+    addBtn.onclick = addWords;
+    inputBox.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addWords();
+      }
+    });
+
+    speedSelect.onchange = () => {
+      speed = parseInt(speedSelect.value);
+    };
+
+    function renderWordList() {
+      wordListDiv.innerHTML = "";
+      customWords.forEach(word => {
+        const row = document.createElement("div");
+        row.className = "wordItem";
+
+        const label = document.createElement("span");
+        label.textContent = word;
+
+        const controls = document.createElement("div");
+        controls.style.display = "flex";
+        controls.style.alignItems = "center";
+
+        const colors = document.createElement("div");
+        colors.className = "presetColors";
+
+        presetColors.forEach(hex => {
+          const swatch = document.createElement("div");
+          swatch.className = "colorSwatch";
+          swatch.style.background = hex === "rainbow"
+            ? "linear-gradient(to right, red, orange, yellow, green, cyan, blue, violet)"
+            : hex;
+
+          if (rainbowWords[word] && hex === "rainbow") swatch.classList.add("selected");
+          else if (!rainbowWords[word] && wordColors[word] === hex) swatch.classList.add("selected");
+
+          swatch.onclick = () => {
+            if (hex === "rainbow") {
+              rainbowWords[word] = true;
+            } else {
+              rainbowWords[word] = false;
+              wordColors[word] = hex;
+            }
+            renderWordList();
+          };
+
+          colors.appendChild(swatch);
+        });
+
+        controls.appendChild(colors);
+
+        row.appendChild(label);
+        row.appendChild(controls);
+        wordListDiv.appendChild(row);
+      });
+    }
+
+    function getRandomWord() {
+      if (customWords.length === 0) return null;
+      const word = customWords[Math.floor(Math.random() * customWords.length)];
+      return {
+        word: word.split(""),
+        color: rainbowWords[word] ? getRainbowColor() : wordColors[word] || "#00FF00"
+      };
+    }
+
+    function getRainbowColor() {
+      const hue = (rainbowIndex++ % 360);
+      return `hsl(${hue}, 100%, 50%)`;
+    }
+
+    function draw() {
+      columns = Math.floor(canvas.width / fontSize);
+      if (drops.length !== columns) {
+        drops.length = columns;
+        drops.fill(1);
+      }
+
+      ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.font = fontSize + "px monospace";
+
+      for (let i = 0; i < drops.length; i++) {
+        const x = i * fontSize;
+        const y = drops[i] * fontSize;
+
+        if (Math.random() < 0.1 && customWords.length > 0) {
+          const item = getRandomWord();
+          if (item) {
+            const { word, color } = item;
+            for (let j = 0; j < word.length; j++) {
+              ctx.fillStyle = color;
+              ctx.fillText(word[j], x, y + j * fontSize);
+            }
+          }
+        } else {
+          const char = letters[Math.floor(Math.random() * letters.length)];
+          ctx.fillStyle = "#00FF00";
+          ctx.fillText(char, x, y);
+        }
+
+        if (y > canvas.height && Math.random() > 0.975) {
+          drops[i] = 0;
+        }
+        drops[i] += speed;
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    draw();
+  </script>
+</body>
+</html>
